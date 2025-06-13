@@ -1,147 +1,105 @@
-# Logan Canyon Viewshed Score Calculator Toolbox — Instructions
+# Logan Canyon Viewshed Score Calculator Toolbox
 
 ## Overview
 
-This tool calculates signal coverage from proposed cell tower locations and assigns each tower a score based on how many target features (e.g., critical areas) fall within its viewshed. A higher score represents better visibility.
+This tool calculates visibility (viewsheds) from a set of input points and assigns scores based on spatial intersections with other feature classes. It accepts the following inputs:
 
-While the current logic rewards high visibility, the system can be adapted to scenarios where **low visibility is preferable** (e.g., for conservation).
+* **Observer Points** (e.g., cell towers, lamp posts, signs)
+* **Elevation Raster**
+* **Tower Range** (distance and units)
+* **Output Geodatabase**
+* **Scoring Parameter Layers** (with numeric “score” fields)
+* **Observer Height** (height and units)
 
-### Inputs Required
-
-- **Observer Points**  
-  - Must include a user-defined height in a field named `OFFSETA`.
-
-- **Elevation Raster**
-
-- **List of Scoring Parameters**  
-  - Each must include a numeric field named `score` (capitalization doesn't matter).
-  - If a feature class contains multiple score values, it will be handled differently (see [Data Preparation](#data-preparation)).
-
-The tool performs the following steps:
-
-1. Generates individual viewsheds from each observer point.
-2. Converts viewsheds to vector polygons.
-3. Uses a **Spatial Join** to intersect each polygon with the scoring parameters.
-4. Updates the observer point attribute table with:
-   - A final score
-   - A breakdown of scoring contributions by parameter
-
-> **Note:** The input Observer Points layer **will be modified** by the tool and is also part of the output.
+Each viewshed is calculated individually, converted to a polygon, and used to perform spatial joins with scoring layers. Scores are aggregated and recorded in the attribute table of the input points.
 
 ---
 
 ## Data Preparation
 
-1. **Projection**
-   - Project all inputs to the **same coordinate system**.
-   - The tool depends on consistent units for accurate analysis.
+Before running the tool:
 
-2. **Observer Points**
-   - Must have a field named `OFFSETA` that defines the height of the point above the surface.
-   - The tool calculates visibility using the DEM elevation + `OFFSETA`.
+* **Scoring Layers** must have a numeric `score` field.
 
-3. **Scoring Parameters**
-   - Must contain a field called `score` (case-insensitive).
-   - This field must be numeric (integer, float, etc.).
-   - If features have **multiple score values**, the tool selects the **maximum** score among overlapping features.
-     - Example: If three highway segments with scores 1, 3, and 5 intersect a viewshed, only 5 is added to the score.
+  * If a viewshed intersects multiple features with different scores, the **highest score** is retained.
+  * If all features share the same score, the tool will **count** the number of intersected features and multiply by the score.
 
-4. **Output Location**
-   - Define a geodatabase or folder for output data.
-   - Input data will not be moved, but updated outputs (including polygons and observer points) will be saved here.
+    * *Example*: If a road layer has a score of 2 and a viewshed intersects 5 roads, the resulting score is 10.
 
-> It is recommended to use the same folder or geodatabase that stores your input observer points.
+* **Tower Range** limits viewshed extent from each point. This simulates realistic signal limitations (e.g., 5G towers range \~1–3 miles).
+
+* **Viewsheds** are computed based on the resolution of the input DEM (e.g., a 10m raster results in 10x10m analysis cells).
+
+* **Observer Points** must contain valid geometry. Invalid geometries or null shapes will cause the tool to fail.
+
+* **Coordinate System**: All inputs should be projected to the same coordinate system. This ensures consistent units. (Support for dynamic unit conversion is planned.)
 
 ---
 
 ## Using the Tool
 
-1. Launch the tool and input your prepared datasets.
-2. Let it run (performance depends on system specs).
+1. Provide the required input layers and parameters.
+2. Run the tool. Processing time depends on machine specifications and number of input points.
 
-> **Performance Note:**  
-> - On an Intel Core i7 with 16GB RAM and a 6GB GPU:  
->   - 10 points → ~5 minutes  
->   - 55 points → ~40 minutes
+> **Performance Benchmark**
+> On an Intel Core i7 with 16GB RAM and 6GB GPU:
+>
+> * 10 observer points: \~5 minutes
+> * 55 observer points: \~40 minutes
 
-### Outputs
-
-- A polygon layer of viewsheds.
-- The updated Observer Points layer with new fields showing:
-  - Final score
-  - Individual contributions from each scoring parameter
-
-> The `OBJECTID` of points will match the `OBJECTID` of their corresponding polygon in the viewshed output.
+> **Note:**
+>
+> * Progress and messages are shown in the **Details pane**.
+> * The majority of runtime is spent generating viewsheds.
+> * Final outputs include the input points (with updated scores) and generated viewshed polygons.
 
 ---
 
 ## Understanding the Output
 
-You’ll receive a table like this:
+![Table of results showing scores](table.png "Table")
 
-| ID | F-Type | OFFSETA | Score | Parameter 1       | Parameter 2       | Parameter 3       | Parameter 4        | Parameter 5       |
-|----|--------|---------|-------|-------------------|-------------------|-------------------|--------------------|-------------------|
-| 1  | Point  | 20      | 15    | Score: 0 Count: 0 | Score: 3 Count: 1 | Score: 0 Count: 0 | Score: 10 Count: 2 | Score: 2 Count: 1 |
-| 2  | Point  | 20      | 10    | Score: 0 Count: 0 | Score: 3 Count: 1 | Score: 0 Count: 0 | Score: 5 Count: 1  | Score: 2 Count: 1 |
-| 3  | Point  | 20      | 18    | Score: 0 Count: 0 | Score: 4 Count: 1 | Score: 0 Count: 0 | Score: 10 Count: 2 | Score: 4 Count: 2 |
-| 4  | Point  | 20      | 16    | Score: 3 Count: 1 | Score: 4 Count: 1 | Score: 0 Count: 0 | Score: 5 Count: 1  | Score: 4 Count: 2 |
+The resulting table includes:
 
-### Breakdown
+* One column per scoring parameter, showing the count of intersected features and total score.
+* A **final score** column summarizing the total score per observer point.
 
-- **OFFSETA**: Height used in viewshed calculation.
-- **Score**: Final summed score from intersected features.
-- **Each parameter field** follows this format:  
-  - `Score: ## Count: ##`  
-  - Score = value attributed by that parameter  
-  - Count = number of intersected features contributing that score
+> **Interpretation Example:**
+>
+> * **High Score = Good**: For maximizing cell tower coverage.
+> * **Low Score = Good**: For minimizing visibility of a structure.
 
-> Multi-score parameters (e.g., accident-prone highway segments) will always show `Count: 1` and the **maximum** intersecting score.
+Scoring priorities are user-defined and should reflect project goals.
 
 ---
 
-## Limitations to Consider
+## Limitations and Considerations
 
-This tool attempts to reduce uncertainty caused by:
+* **Input Data Quality**: Ensure clean geometry and reliable attribute data. Inaccurate inputs will produce unreliable results.
 
-- **Overrepresentation of polyline features**  
-  - Polyline inputs are **dissolved** unless they contain multiple unique score values.
-  - This avoids inflating scores when many small segments overlap a viewshed.
+* **Subjectivity in Scoring**: Score values are user-assigned and subjective. Flexibility is intentional to support varying project goals.
 
-- **DEM generalizations**  
-  - Viewshed outputs may have many small fragments.
-  - These are aggregated to avoid double-counting and to clean the polygon geometry.
+  * *Example*: One project may prioritize trail visibility; another may prioritize avoiding recreation areas.
 
-- **User-defined scores**  
-  - It is the user’s responsibility to assign meaningful and appropriate score values to each feature class.
+* **Elevation Data**: DEM accuracy and resolution impact results. Choose a resolution that matches the project’s precision needs.
+
+  * *Example*: 1m DEMs may be overkill for cell tower planning, but necessary for analyzing lamp post visibility.
+
+* **Generalization Warning**: This tool provides approximations. Results are best used for **big-picture planning**, not fine-scale engineering.
 
 ---
 
 ## Data Credits
 
-- **USGS** (2022). Land Cover Data.  
-  https://www.sciencebase.gov/catalog/item  
-- **USGS** (2024). Digital Elevation Model (DEM).  
-  https://www.usgs.gov/the-national-map-data-delivery  
-- **Highway Safety Department** (2023). Auto Accident Data  
-- **Utah Geospatial Resource Center (UGRC)** (2023). Roads and Trails Dataset  
-  https://gis.utah.gov/products/sgid/transportation/  
-- **Mountain Project**. Logan Canyon Climbing Locations  
-  https://www.mountainproject.com/area/105739310/logan-canyon  
-- **Dallin Moon** (2023). Backcountry Names Dataset
+* **United States Geological Survey (USGS)** (2022 & 2024). DEM – [usgs.gov](https://www.usgs.gov/the-national-map-data-delivery)
+* **Highway Safety Department** – Logan Crash Data
+* **Utah Geospatial Resource Center (UGRC)** – Roads and Trails Dataset
+* **Mountain Project** – Logan Canyon Climbing Locations - (https://www.mountainproject.com)
+* **Dallin Moon (2023)** – Backcountry Names & Existing Structures Datasets
 
 ---
 
-## Future Improvements and Expansions
+## Future Improvements
 
-- **Use cases beyond cell towers**  
-  - Light pollution studies, billboard placement, viewshed protection, etc.
-  - In these cases, **low visibility scores** could be ideal.
-
-- **Use newer Viewshed2 tool**  
-  - Provides better control over units and eliminates need for a buffer.
-
-- **Enhanced input handling**  
-  - Allow users to specify a static score value during input selection instead of requiring a score field.
-  - Multi-score features would still need preprocessing.
-
-
+* Support for **line features** as observer input
+* More **user-friendly scoring interface**
