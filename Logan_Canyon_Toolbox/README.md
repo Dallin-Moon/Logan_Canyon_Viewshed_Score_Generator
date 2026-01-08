@@ -2,10 +2,12 @@
 
 ## Overview
 
-This tool calculates visibility (viewsheds) from a set of input points and assigns scores based on spatial intersections with other feature classes. It accepts the following inputs:
+This tool calculates visibility (viewsheds) from a set of input objects and assigns scores based on spatial intersections with other feature classes. It accepts the following inputs:
 
-* **Observer Points** (e.g., cell towers, lamp posts, signs)
+* **Observer Inputs** (e.g., cell towers, lamp posts, signs, buildings, trails/line features)
 * **Elevation Raster**
+* **Estimate DEM Boolean**
+* **Land Cover Data**
 * **Tower Range** (distance and units)
 * **Output Geodatabase**
 * **Scoring Parameter Layers** (with numeric “score” fields)
